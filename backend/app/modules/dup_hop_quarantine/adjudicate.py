@@ -151,9 +151,8 @@ def adjudicate(conn, hops: list[dict]) -> Plan:
         if not members:
             continue
         grouped_keys.add(key)
-        member_list = list(members.values())
-        # 组证明只挂首个成员；其余成员稍后按干净点处理
-        head = member_list[:1]
+        # 整组隔离：全员进组，一个不留——组内任一点都不得进正式时间线；
+        # 已在正式线的成员（official_pulled）由落库层逐一拉出后并入隔离。
         plan.groups.append(
             GroupPlan(
                 id=gid,
@@ -161,12 +160,9 @@ def adjudicate(conn, hops: list[dict]) -> Plan:
                 event_ts=key[1],
                 location_code=key[2],
                 event_code=key[3],
-                members=head,
+                members=list(members.values()),
             )
         )
-        for extra in member_list[1:]:
-            if extra.origin == "batch":
-                plan.clean.append(extra)
 
     # 干净点：不在任何重复组里的本批新点（组内任一点都不得进正式线）
     for h in fresh:

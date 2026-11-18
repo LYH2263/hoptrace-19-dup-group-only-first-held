@@ -47,7 +47,8 @@ const dupGroups = computed(() => detail.value?.dup_groups || [])
       <div class="stat"><b>{{ overview.waybills }}</b><span>运单</span></div>
       <div class="stat"><b>{{ overview.hops_primary }}</b><span>正式 hop</span></div>
       <div class="stat"><b>{{ overview.hops_sidecar }}</b><span>旁路</span></div>
-      <div class="stat"><b>{{ overview.quarantine }}</b><span>隔离</span></div>
+      <div class="stat"><b>{{ overview.quarantine }}</b><span>隔离组</span></div>
+      <div class="stat"><b>{{ overview.quarantine_points }}</b><span>隔离点</span></div>
     </div>
 
     <div class="tri">

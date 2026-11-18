@@ -19,6 +19,7 @@ export const api = {
   dupGroups: (waybillId) =>
     req(waybillId ? `/api/dup-groups?waybill_id=${encodeURIComponent(waybillId)}` : '/api/dup-groups'),
   dupGroupProof: (id) => req(`/api/dup-groups/${encodeURIComponent(id)}/proof`),
+  dupGroupTearCheck: (id) => req(`/api/dup-groups/${encodeURIComponent(id)}/tear-check`),
   sidecar: () => req('/api/sidecar'),
   ingest: () => req('/api/ingest/run', { method: 'POST' }),
   proofs: (waybillId) =>

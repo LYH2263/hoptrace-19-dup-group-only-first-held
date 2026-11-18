@@ -4,6 +4,7 @@ import { api } from '../api.js'
 
 const rows = ref([])
 const expanded = ref({})   // group_id -> proof
+const tears = ref({})      // group_id -> tear-check
 const loading = ref({})    // group_id -> bool
 const err = ref('')
 
@@ -24,8 +25,12 @@ async function toggle(row) {
   }
   loading.value = { ...loading.value, [id]: true }
   try {
-    const proof = await api.dupGroupProof(id)
+    const [proof, tear] = await Promise.all([
+      api.dupGroupProof(id),
+      api.dupGroupTearCheck(id).catch(() => null),
+    ])
     expanded.value = { ...expanded.value, [id]: proof }
+    tears.value = { ...tears.value, [id]: tear }
   } catch (e) {
     err.value = String(e.message || e)
   } finally {
@@ -84,6 +89,24 @@ async function toggle(row) {
                     </tr>
                   </tbody>
                 </table>
+                <div class="tear-box" v-if="tears[r.id]">
+                  <p class="member-head">
+                    撕裂核证 {{ tears[r.id].id }} · 批次 {{ tears[r.id].batch_id }}
+                    <span v-if="tears[r.id].official_leak?.length" class="leak">
+                      正式轴泄漏：{{ tears[r.id].official_leak.join(', ') }}
+                    </span>
+                    <span v-else class="ok-tag">
+                      正式轴排除 {{ tears[r.id].official_exclusion.filter(e => !e.on_official_axis).length }}/{{ tears[r.id].member_count }} ✓
+                    </span>
+                  </p>
+                  <p class="tear-line">
+                    投影：{{ tears[r.id].proj_before }} → {{ tears[r.id].proj_after }}（当前 {{ tears[r.id].proj_current }}）
+                  </p>
+                  <p class="tear-line">
+                    全员名册：{{ tears[r.id].members.map(m => m.hop_id).join(', ') }}
+                    <span class="muted">（物化时 {{ tears[r.id].recorded_member_count }} 点）</span>
+                  </p>
+                </div>
               </div>
             </td>
           </tr>
@@ -104,6 +127,13 @@ async function toggle(row) {
 }
 .member-head { margin: 0 0 8px; font-size: 13px; }
 .member-table { background: var(--panel); }
+.tear-box {
+  margin-top: 8px;
+  padding: 8px 10px;
+  border: 1px dashed var(--amber-soft);
+  background: var(--panel);
+}
+.tear-line { margin: 4px 0 0; font-size: 12px; font-family: var(--mono); }
 .ok-tag { color: var(--mint); margin-left: 10px; font-family: var(--mono); font-size: 12px; }
 .leak { color: var(--danger); margin-left: 10px; font-family: var(--mono); font-size: 12px; }
 </style>

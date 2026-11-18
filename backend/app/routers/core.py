@@ -23,6 +23,9 @@ def overview():
                 "SELECT COUNT(*) AS c FROM hops WHERE channel='sidecar'"
             ).fetchone()["c"],
             "quarantine": conn.execute("SELECT COUNT(*) AS c FROM dup_groups").fetchone()["c"],
+            "quarantine_points": conn.execute(
+                "SELECT COUNT(*) AS c FROM dup_group_members"
+            ).fetchone()["c"],
         }
     finally:
         conn.close()
@@ -93,6 +96,20 @@ def dup_group_proof(group_id: str):
         if not proof:
             raise HTTPException(404, "重复组不存在")
         return proof
+    finally:
+        conn.close()
+
+
+@router.get("/dup-groups/{group_id}/tear-check")
+def dup_group_tear_check(group_id: str):
+    """整组撕裂核证（只读）：组键、全员、正式轴排除证明、投影前后。"""
+    conn = connect()
+    try:
+        dup_schema.ensure_tables(conn)
+        tear = dup_proofs.get_tear_check(conn, group_id)
+        if not tear:
+            raise HTTPException(404, "重复组撕裂核证不存在")
+        return tear
     finally:
         conn.close()
 

@@ -2,6 +2,9 @@
 
 证明与隔离列表、正式时间线、装载报告同源——都查 dup_groups / dup_group_members /
 hops 三表，禁止另算一套导致刷新后对不上。
+
+整组撕裂核证（只读）：组键、全员、正式轴排除证明、投影前后。存储行是物化时快照，
+读路径在其上再做实时同源复核（名册、排除、当前投影），禁止只回放旧快照。
 """
 from __future__ import annotations
 
@@ -61,6 +64,81 @@ def get_proof(conn, group_id: str) -> dict | None:
         "members": member_list,
         "disposition": g["disposition"],
         "official_leak": [r["hop_id"] for r in leaked],  # 恒应为空；非空即证明失败
+    }
+
+
+def get_tear_check(conn, group_id: str) -> dict | None:
+    """整组撕裂核证（只读）：组键、全员、正式轴排除证明、投影前后。
+
+    物化快照（dup_group_tear_checks）+ 实时同源复核一起返回：
+    名册、正式轴排除、当前投影都以当下库内状态重查，快照只作对照。
+    """
+    g = conn.execute(
+        "SELECT id, waybill_id, event_ts, location_code, event_code, member_count "
+        "FROM dup_groups WHERE id=?",
+        (group_id,),
+    ).fetchone()
+    if not g:
+        return None
+    tc = conn.execute(
+        "SELECT * FROM dup_group_tear_checks WHERE group_id=? "
+        "ORDER BY created_at DESC, id DESC LIMIT 1",
+        (group_id,),
+    ).fetchone()
+    if not tc:
+        return None
+
+    # 实时复核全员名册（与隔离列表同源）
+    member_rows = conn.execute(
+        "SELECT hop_id, origin FROM dup_group_members WHERE group_id=? ORDER BY hop_id",
+        (group_id,),
+    ).fetchall()
+    member_ids = [m["hop_id"] for m in member_rows]
+
+    # 实时复核正式轴排除证明：组成员任一不得出现在正式时间线
+    exclusion = []
+    leak = []
+    for hid in member_ids:
+        on_axis = (
+            conn.execute(
+                "SELECT 1 FROM hops WHERE id=? AND channel='primary' AND retracted=0",
+                (hid,),
+            ).fetchone()
+            is not None
+        )
+        exclusion.append({"hop_id": hid, "on_official_axis": on_axis})
+        if on_axis:
+            leak.append(hid)
+
+    recorded = json.loads(tc["member_ids_json"])
+    wb = conn.execute(
+        "SELECT status_proj FROM waybills WHERE id=?", (g["waybill_id"],)
+    ).fetchone()
+    return {
+        "id": tc["id"],
+        "group_id": g["id"],
+        "batch_id": tc["batch_id"],
+        "dup_key": {
+            "waybill_id": g["waybill_id"],
+            "event_ts": g["event_ts"],
+            "location_code": g["location_code"],
+            "event_code": g["event_code"],
+        },
+        "members": [{"hop_id": m["hop_id"], "origin": m["origin"]} for m in member_rows],
+        "member_count": len(member_ids),
+        "recorded_member_ids": recorded,
+        "recorded_member_count": tc["member_count"],
+        "official_exclusion": exclusion,
+        "official_leak": leak,  # 恒应为空；非空即核证失败
+        "proj_before": tc["proj_before"],
+        "proj_after": tc["proj_after"],
+        "proj_current": wb["status_proj"] if wb else None,
+        "checks": {
+            "axis_excluded": not leak,
+            "roster_consistent": len(member_ids) == g["member_count"],
+            "recorded_roster_intact": set(recorded) <= set(member_ids),
+        },
+        "created_at": tc["created_at"],
     }
 
 

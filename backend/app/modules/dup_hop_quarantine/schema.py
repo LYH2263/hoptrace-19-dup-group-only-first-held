@@ -7,6 +7,10 @@
   - dup_group_members 按组挂成员点（成员键 + 原文快照），与正式 hops 表物理分离，
                       隔离集合可独立查询，刷新后仍对得上。
 未采用「成员键集合写入本批不可变快照列」形态。
+
+整组撕裂核证实体（与隔离物化同事务写入，只读接口对外）：
+  - dup_group_tear_checks 按 (组, 批次) 记录：组键、全员名册、正式轴排除证明、
+    投影前后值。读路径在此快照之上再做实时同源复核，禁止只回放旧快照。
 """
 
 DDL = """
@@ -36,6 +40,23 @@ CREATE TABLE IF NOT EXISTS dup_group_members (
   payload_json TEXT NOT NULL,
   created_at TEXT NOT NULL,
   PRIMARY KEY (group_id, hop_id)
+);
+
+CREATE TABLE IF NOT EXISTS dup_group_tear_checks (
+  id TEXT PRIMARY KEY,
+  group_id TEXT NOT NULL REFERENCES dup_groups(id),
+  waybill_id TEXT NOT NULL,
+  event_ts TEXT NOT NULL,
+  location_code TEXT NOT NULL,
+  event_code TEXT NOT NULL,
+  batch_id TEXT NOT NULL,
+  member_ids_json TEXT NOT NULL,
+  member_count INTEGER NOT NULL,
+  official_exclusion_json TEXT NOT NULL,
+  leak_count INTEGER NOT NULL DEFAULT 0,
+  proj_before TEXT,
+  proj_after TEXT,
+  created_at TEXT NOT NULL
 );
 """
 
